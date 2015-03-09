@@ -1,7 +1,19 @@
-make
+Complie
+------
+- make
 
-cp ./armeabi/audio-test to Android
-adb push ./armeabi/audio-test /
+Install
+------
+- adb shell
+- cd /sdcard
+- mkdir test
+- exit
+- adb push armeabi/audio-test /sdcard/test
+- adb push test.mp3 /sdcard/test
+- adb push test_pcm_s16le.pcm /sdcard/test
 
-adb shell
-execute ./armeabi/audio-test on Android (with adb shell)
+Run
+------
+- adb shell
+- cd /sdcard/test/
+- ./audio-test test.mp3
