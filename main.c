@@ -1,112 +1,60 @@
+#include <stdlib.h>
 #include <stdio.h>
-#include <SLES/OpenSLES.h>
-#include <android/log.h>
-#include <assert.h>
-enum _bool {
-  false = 0,
-  true
-};
-typedef enum _bool bool;
-/* engine interface */
-static SLObjectItf engineObject = NULL;
-static SLEngineItf engineEngine;
-/* output mix interfaces */
-static SLObjectItf outputMixObject = NULL;
-static SLEnvironmentalReverbItf outputMixEnvironmentalReverb = NULL;
-/* aux effect on the output mix */
-static const SLEnvironmentalReverbSettings reverbSettings =
-  SL_I3DL2_ENVIRONMENT_PRESET_STONECORRIDOR;
-/* uri player interfaces */
-static SLObjectItf uriPlayerObject = NULL;
-static SLPlayItf uriPlayerPlay;
-static SLSeekItf uriPlayerSeek;
-void createEngine()
+#include <string.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <stdbool.h> 
+
+#include "SLES/OpenSLES.h"
+#include "SLES/OpenSLES_Android.h"
+
+static void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 {
-  SLresult result;
-  // create engine
-  result = slCreateEngine(&engineObject, 0, NULL, 0, NULL, NULL);
-  assert(SL_RESULT_SUCCESS == result);
-  // realize the engine
-  result = (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);
-  assert(SL_RESULT_SUCCESS == result);
-  // get the engine interface
-  result = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &engineEngine);
-  assert(SL_RESULT_SUCCESS === result);
-  // create output mix
-  const SLInterfaceID ids[1] = {SL_IID_ENVIRONMENTALREVERB};
-  const SLboolean req[1] = {SL_BOOLEAN_FALSE};
-  result = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 1, ids, req);
-  assert(SL_RESULT_SUCCESS == result);
-  // realize the output mix
-  result = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);
-  assert(SL_RESULT_SUCCESS == result);
-#if 0  
-  // get the environmental reverb interface
-  result = (*outputMixObject)->GetInterface(outputMixObject, SL_IID_ENVIRONMENTALREVERB,
-        &outputMixEnvironmentalReverb);
-  if (SL_RESULT_SUCCESS == result) {
-    result = (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(outputMixEnvironmentalReverb, &reverbSettings);
-  }
-#endif
-  // ignore unsuccessful result codes for env reverb
+	fprintf(stderr, "9992");
 }
-bool createUriAudioPlayer(char* uri)
+
+int main(int argc, char* const argv[])
 {
-  SLresult result;
-  // config audio source
-  SLDataLocator_URI loc_uri = {SL_DATALOCATOR_URI, (SLchar *) uri};
-  SLDataFormat_MIME format_mime = {SL_DATAFORMAT_MIME, NULL, SL_CONTAINERTYPE_UNSPECIFIED};
-  SLDataSource audioSrc = {&loc_uri, &format_mime};
-  // config audio sink
-  SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, outputMixObject};
-  SLDataSink audioSnk = {&loc_outmix, NULL};
-  // create audio player
-  const SLInterfaceID ids[1] = {SL_IID_SEEK};
-  const SLboolean req[1] = {SL_BOOLEAN_TRUE};
-  result = (*engineEngine)->CreateAudioPlayer(engineEngine, &uriPlayerObject, &audioSrc, &audioSnk, 1, ids, req);
-  assert(SL_RESULT_SUCCESS == result);
-  // realize the player
-  result = (*uriPlayerObject)->Realize(uriPlayerObject, SL_BOOLEAN_FALSE);
-  if (SL_RESULT_SUCCESS != result) {
-    (*uriPlayerObject)->Destroy(uriPlayerObject);
-    uriPlayerObject = NULL;
-    return false;
-  }
-  // get the play interface
-  result = (*uriPlayerObject)->GetInterface(uriPlayerObject, SL_IID_PLAY, &uriPlayerPlay);
-  assert(SL_RESULT_SUCCESS == result);
-  // get the seek interface
-  result = (*uriPlayerObject)->GetInterface(uriPlayerObject, SL_IID_SEEK, &uriPlayerSeek);
-  assert(SL_RESULT_SUCCESS == result);
-  // enable whole file looping
-  result = (*uriPlayerSeek)->SetLoop(uriPlayerSeek, SL_BOOLEAN_TRUE, 0, SL_TIME_UNKNOWN);
-  assert(SL_RESULT_SUCCESS == result);
-  return true;
-}
-setPlayingUriAudioPlayer(bool played)
-{
-  SLresult result;
-  if (uriPlayerPlay != NULL) {
-    result = (*uriPlayerPlay)->SetPlayState(uriPlayerPlay, played ?
-                        SL_PLAYSTATE_PLAYING : SL_PLAYSTATE_PAUSED);
-    assert(SL_RESULT_SUCCESS == result);
-  }
-}
-int main(int argc, char** argv)
-{
-  // Create the OpenSL engine
-  createEngine();
-  // Create the audio player with everything ready.
-  createUriAudioPlayer(argv[1]);
-  printf("Playing...");
-  setPlayingUriAudioPlayer(true);      // play the music
-  sleep(20);
-  printf("Pause...");  
-  setPlayingUriAudioPlayer(false);    // pause the player
-  sleep(20);
-  
-  printf("Playing...");    
-  setPlayingUriAudioPlayer(true);
-  
-  sleep(1000);  // Just wait for the playing threads
+    SLresult    result;
+		SLObjectItf engineObject = NULL;
+    result = slCreateEngine( &engineObject, 0, NULL, 0, NULL, NULL);
+    result = (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);
+
+		SLEngineItf engineEngine;
+		result = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, (void*)&engineEngine);
+
+		SLDataFormat_PCM format_pcm = { SL_DATAFORMAT_PCM, 2, SL_SAMPLINGRATE_44_1,
+			SL_PCMSAMPLEFORMAT_FIXED_16, SL_PCMSAMPLEFORMAT_FIXED_16,
+			SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT, SL_BYTEORDER_LITTLEENDIAN };
+		SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
+		SLDataSource audioSrc = {&loc_bufq, &format_pcm};
+
+		SLObjectItf outputMixObject = NULL;
+		result = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 0, NULL, NULL);
+		result = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);
+
+		SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, outputMixObject};
+		SLDataSink audioSnk = {&loc_outmix, NULL};
+
+		SLObjectItf bqPlayerObject = NULL;
+		SLPlayItf bqPlayerPlay;
+		SLAndroidSimpleBufferQueueItf bqPlayerBufferQueue;
+		const SLInterfaceID ids1[] = {SL_IID_ANDROIDBUFFERQUEUESOURCE};
+		const SLboolean req1[] = {SL_BOOLEAN_TRUE};
+	fprintf(stderr, "1\n");
+		result = (*engineEngine)->CreateAudioPlayer(engineEngine, &bqPlayerObject, &audioSrc, &audioSnk, 1, ids1, req1);
+	fprintf(stderr, "2\n");
+		result = (*bqPlayerObject)->Realize(bqPlayerObject, SL_BOOLEAN_FALSE);
+	fprintf(stderr, "3\n");
+		result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_PLAY, &bqPlayerPlay);
+	fprintf(stderr, "4\n");
+		result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_BUFFERQUEUE, &bqPlayerBufferQueue);
+	fprintf(stderr, "5\n");
+		result = (*bqPlayerBufferQueue)->RegisterCallback(bqPlayerBufferQueue, bqPlayerCallback, NULL);
+	fprintf(stderr, "6\n");
+		result = (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PLAYING);
+		//bqPlayerBufferQueue->Enqueue(bqPlayerBufferQueue, NULL, );
+
+		usleep(60000000);
+    return 0;
 }
