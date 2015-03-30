@@ -8,9 +8,13 @@
 #include "SLES/OpenSLES.h"
 #include "SLES/OpenSLES_Android.h"
 
+short *playBuffer = NULL;
+FILE  *file = NULL;
+
 static void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
 {
-	fprintf(stderr, "9992\n");
+    int bytes = fread(playBuffer, 1, 2048 * sizeof(short), file);
+    (*bq)->Enqueue(bq, playBuffer,bytes);
 }
 
 int main(int argc, char* const argv[])
@@ -57,8 +61,16 @@ int main(int argc, char* const argv[])
 	//result = (*bqPlayerObject)->RegisterCallback(bqPlayerObject, bqPlayerCallback, NULL);
     fprintf(stderr, "result %d\n", result);
 	result = (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PLAYING);
-	//bqPlayerBufferQueue->Enqueue(bqPlayerBufferQueue, NULL, );
     fprintf(stderr, "result %d\n", result);
+
+    // 1024 frame * 2 channel
+    playBuffer = (short *) calloc(1024 * 2, sizeof(short));
+    (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, playBuffer, 2048*sizeof(short));
+    
+	//bqPlayerBufferQueue->Enqueue(bqPlayerBufferQueue, NULL, );
+    
+    file = fopen("test_pcm_s16le.pcm", "r");
+    
 	usleep(60000000);
 	return 0;
 }
